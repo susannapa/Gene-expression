@@ -1,0 +1,33 @@
+library(ggplot2)
+
+expr_file<-"data/input/expression_matrix.csv"
+meta_file<-"data/input/columns_metadata.csv"
+gene_file<-"data/input/rows_metadata.csv"
+output_folder<-"data/output/"
+
+expr<-read.csv(expr_file,header=FALSE,row.names=1)
+metadata<-read.csv(meta_file,row.names=1,header=TRUE)
+genes<-read.csv(gene_file,row.names=3)
+
+#update row and column names
+colnames(expr)<-row.names(metadata)
+rownames(expr)<-row.names(genes)
+
+#create plotdata
+plotdata<-merge(metadata,t(expr),by=0)
+
+age_levels<-c("8-9 PCW","12 PCW","13 PCW","16-17 PCW","19-21 PCW",
+              "24-37 PCW","4 months","6-12 months","2-4 years",
+              "8-11 years","13-19 years","21-37 years","40+ years")
+
+p<-ggplot(plotdata,aes(x=factor(Name,levels=age_levels),y=ENSG00000144285))+
+  geom_boxplot(outlier.shape=NA)+
+  ylab("SCN1A Expression (RPKM)")+ylim(0,10)+xlab("Age")+
+  theme_bw()+
+  theme(axis.text.x=element_text(size=10,color="black",vjust=0.6,angle=90),
+        axis.text.y=element_text(size=10,color="black"),
+        axis.title=element_text(size=10))
+
+ggsave(filename=file.path(output_folder,"SCN1A_BrainSpan_expression.png"),plot=p,width=10,height=5,dpi=300)
+
+

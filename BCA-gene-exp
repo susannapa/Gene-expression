@@ -1,0 +1,77 @@
+#Summarise BrainCellAtlas Seurat object for one or more genes
+
+library(data.table)
+library(tidyverse)
+library(Seurat)
+library(Matrix)
+
+
+meta_file<-"data/input/columns_metadata.csv"
+bts_file<-"data/input/BTS_atlas_seurat.rds"
+output_folder<-"data/output/"
+
+meta<-read.csv(meta_file,row.names=1)
+bts<-readRDS(bts_file)
+
+# Sparse normalized expression matrix
+expr<-bts[["RNA"]]@data
+gene_df<-bts[["RNA"]]@meta.features
+
+# Metadata
+meta$cell<-row.names(meta)
+meta_subset<-meta[,c("Stage","Cell Type","cell")]
+
+genes_to_plot<-c("SCN1A","SCN2A","SCN8A")
+
+for(gene_name in genes_to_plot){
+  gene_expr<-as.data.frame(expr[gene_name,])
+  gene_expr$cell<-row.names(gene_expr)
+  colnames(gene_expr)[1]<-"Exp"
+  gene_expr<-left_join(gene_expr,meta_subset,by="cell")
+
+  # Boxplot per stage
+  p1<-ggplot(gene_expr)+
+    geom_boxplot(aes(x=Stage,y=Exp),outlier.shape=NA)+
+    theme_bw()+
+    theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1))+
+    ylab(paste0(gene_name," Expression"))+
+    xlab("")
+
+  ggsave(filename=paste0(output_folder,gene_name,"_boxplot.png"),plot=p1,width=8,height=5)
+
+  # Pseudo-bulk per stage
+  pseudobulk<-gene_expr%>%
+    group_by(Stage)%>%
+    summarise(mean_expression=mean(Exp))
+
+  p2<-ggplot(pseudobulk,aes(x=Stage,y=mean_expression))+
+    geom_point()+
+    geom_line(group=1)+
+    theme_bw()+
+    theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1))+
+    ylab(paste0(gene_name," pseudobulk expression (log-normalized)"))+
+    xlab("")
+
+  ggsave(filename=paste0(output_folder,gene_name,"_pseudobulk.png"),plot=p2,width=8,height=5)
+
+  # By cell type
+  agg_df<-gene_expr%>%
+    group_by(Stage,`Cell Type`)%>%
+    summarise(fraction_expressing=mean(Exp>0),
+              avg_expression=mean(Exp[Exp>0],na.rm=TRUE),
+              .groups='drop')
+
+  p3<-ggplot(agg_df,aes(x=Stage,y=`Cell Type`))+
+    geom_point(aes(size=fraction_expressing,color=avg_expression))+
+    scale_size(range=c(1,6))+
+    scale_color_gradient(low="lightgray",high="red")+
+    theme_minimal()+
+    labs(title=paste0(gene_name," Expression by Cell Type"),
+         x="",
+         y="Cell Type",
+         size="Fraction Expressing",
+         color="Avg Expression")+
+    theme(axis.text.x=element_text(angle=45,hjust=1))
+
+  ggsave(filename=paste0(output_folder,gene_name,"_celltype_expression.png"),plot=p3,width=10,height=6)
+}
